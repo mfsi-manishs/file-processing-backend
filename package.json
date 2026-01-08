@@ -5,17 +5,13 @@
   "main": "app.ts",
   "scripts": {
     "clean": "rimraf dist",
-    "dev": "nodemon --watch src --exec ts-node src/app.ts",
     "build": "tsc",
     "start": "node dist/app.js",
     "test": "jest",
     "test:watch": "jest --watch",
     "lint": "eslint 'src/**/*.{ts,tsx}' --fix",
-    "debug": "nodemon --inspect --watch src --exec ts-node src/app.ts",
-    "migration:run": "ts-node ./node_modules/typeorm/cli.js migration:run",
-    "migration:revert": "ts-node ./node_modules/typeorm/cli.js migration:revert",
-    "migration:generate": "ts-node ./node_modules/typeorm/cli.js migration:generate -n",
-    "db:reset": "npm run migration:revert && npm run migration:run"
+    "dev": "nodemon --watch src --exec ts-node src/app.ts",
+    "debug": "nodemon --watch src --exec \"node --inspect --loader ts-node/esm src/app.ts\""
   },
   "repository": {
     "type": "git",

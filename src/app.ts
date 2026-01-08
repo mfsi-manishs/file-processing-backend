@@ -22,7 +22,7 @@ app.use(morgan(":date[iso] :method :url :status - :response-time ms"));
 app.use(express.json());
 
 // Configure file upload middleware
-const upload = multer({ dest: process.env.UPLOAD_DIR || "uploads/" });
+const upload = multer({ dest: process.env.UPLOAD_DIR || "uploads/", limits: { fileSize: 10 * 1024 * 1024, files: 10 } });
 
 app.get("/", (req, res) => {
   console.log(`request: ${req.method} ${req.url}`);

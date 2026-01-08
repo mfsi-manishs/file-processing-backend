@@ -6,25 +6,34 @@
 import crypto from "crypto";
 import fs from "fs/promises";
 import path from "path";
-import { pool } from "../db/pool.js";
+import type { PoolClient } from "pg";
+import { type File } from "../models/file.model.js";
+import { FileRepository } from "../repositories/file.repo.js";
 
 /**
  * Saves an uploaded file to the database and file system
  * @param projectId The ID of the project to which the file belongs
  * @param file The uploaded file
+ * @param client The PostgreSQL client to use for the transaction
  * @returns The newly created file record
  * @throws Error if the file could not be saved
  */
-export async function saveUploadedFile(projectId: number, file: Express.Multer.File): Promise<File> {
+export async function saveUploadedFile(projectId: number, file: Express.Multer.File, client: PoolClient): Promise<File> {
   const checksum = await hashFile(file.path);
   const storagePath = path.resolve(file.path);
-  const res = await pool.query(
-    `INSERT INTO files(project_id, file_name, file_path, file_type, file_size, checksum)
-     VALUES ($1,$2,$3,$4,$5,$6)
-     RETURNING *`,
-    [projectId, file.originalname, storagePath, file.mimetype, file.size, checksum]
+
+  return new FileRepository().create(
+    {
+      projectId: projectId,
+      fileName: file.originalname,
+      filePath: storagePath,
+      fileSize: file.size,
+      fileType: file.mimetype,
+      checksum: checksum,
+      isOutput: false,
+    },
+    client
   );
-  return res.rows[0];
 }
 
 /**

@@ -4,8 +4,10 @@
  */
 
 import { Router } from "express";
+import fs from "fs";
 import type { Multer } from "multer";
-import { runQuery } from "../db/db.utils.js";
+import { runTransaction } from "../db/db.utils.js";
+import { FileRepository } from "../repositories/file.repo.js";
 import { saveUploadedFile } from "../services/files.service.js";
 
 /**
@@ -21,13 +23,20 @@ export default function filesRouter(upload: Multer) {
   /**
    * Uploads a file to a project and returns the newly created file record
    */
-  router.post("/:projectId/files", upload.single("file"), async (req, res) => {
+  router.post("/:projectId/files", upload.array("file", 10), async (req, res) => {
     const projectId = Number(req.params.projectId);
-    if (!req.file) return res.status(400).json({ error: "No file" });
+    const files = req.files as Express.Multer.File[];
+    if (!files || files.length === 0) {
+      return res.status(400).json({ error: "No files" });
+    }
+
     try {
-      const file = await saveUploadedFile(projectId, req.file);
-      return res.status(201).json(file);
+      const savedFiles = await runTransaction(async (client) => {
+        return Promise.all(files.map((file) => saveUploadedFile(client, projectId, file)));
+      });
+      return res.status(201).json(savedFiles);
     } catch (e: any) {
+      files.forEach((f) => fs.unlink(f.path, () => {})); // cleanup
       return res.status(500).json({ error: e.message });
     }
   });
@@ -37,12 +46,27 @@ export default function filesRouter(upload: Multer) {
    */
   router.get("/:projectId/files", async (req, res) => {
     const projectId = Number(req.params.projectId);
-    const files = await runQuery<File>(
-      `SELECT * FROM files
-       WHERE project_id=$1 ORDER BY created_at DESC`,
-      [projectId]
-    );
-    res.json(files);
+    let files = [];
+    try {
+      files = await new FileRepository().listByProject(projectId);
+    } catch (error: unknown) {
+      return res.status(500).json({ error: error });
+    }
+    return res.json(files);
+  });
+
+  /**
+   * Deletes a file from a project
+   */
+  router.delete("/:projectId/files/:fileId", async (req, res) => {
+    const projectId = Number(req.params.projectId);
+    const fileId = Number(req.params.fileId);
+    try {
+      await new FileRepository().delete(projectId, fileId);
+    } catch (error: unknown) {
+      return res.status(500).json({ error: error });
+    }
+    return res.json({ success: true });
   });
 
   return router;

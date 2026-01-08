@@ -3,8 +3,9 @@
  * @fileoverview Job service
  */
 
-import { pool } from "../db/pool";
-import { type Job, type JobType } from "../models/job.model";
+import { runQuery } from "../db/db.utils.js";
+import { pool } from "../db/pool.js";
+import { type Job, type JobType } from "../models/job.model.js";
 
 /**
  * Queue a new job for processing.
@@ -32,9 +33,9 @@ export async function queueJob(projectId: number, type: JobType, inputFileIds: n
       }
     }
 
-    // Insert job
+    // Create/Insert new job
     const jobRes = await client.query(
-      `INSERT INTO jobs(project_id, type, status)
+      `INSERT INTO jobs(project_id, job_type, status)
        VALUES ($1, $2, 'PENDING')
        RETURNING *`,
       [projectId, type]
@@ -49,7 +50,7 @@ export async function queueJob(projectId: number, type: JobType, inputFileIds: n
     // Batch insert input files into join/association/junction table.
     if (inputFileIds.length > 0) {
       await client.query(
-        `INSERT INTO job_input_files(job_id, file_id)
+        `INSERT INTO jobs_files(job_id, file_id)
          SELECT $1, unnest($2::int[])`,
         [job.id, inputFileIds]
       );
@@ -75,7 +76,7 @@ export async function getNextPendingJob(client: any): Promise<Job | null> {
   await client.query("BEGIN");
 
   const res = await client.query(
-    `SELECT id, project_id, type
+    `SELECT id, project_id, job_type
      FROM jobs
      WHERE status='PENDING'
      ORDER BY created_at
@@ -104,7 +105,7 @@ export async function getNextPendingJob(client: any): Promise<Job | null> {
  * @returns {Promise<void>} - A promise resolving to void when the update is complete.
  */
 export async function updateJobProgress(jobId: number, progress: number) {
-  await pool.query(
+  await runQuery<Job>(
     `UPDATE jobs
      SET progress=$2
      WHERE id=$1 AND status='PROCESSING'`,
@@ -118,7 +119,7 @@ export async function updateJobProgress(jobId: number, progress: number) {
  * @returns {Promise<void>} - A promise resolving to void when the update is complete.
  */
 export async function completeJobWithOutput(jobId: number) {
-  await pool.query(
+  await runQuery<Job>(
     `UPDATE jobs
      SET status='COMPLETED', completed_at=NOW(), progress=100
      WHERE id=$1 AND status='PROCESSING'`,
@@ -133,7 +134,7 @@ export async function completeJobWithOutput(jobId: number) {
  * @returns {Promise<void>} - A promise resolving to void when the update is complete.
  */
 export async function failJob(jobId: number, message: string) {
-  await pool.query(
+  await runQuery<Job>(
     `UPDATE jobs
      SET status='FAILED', completed_at=NOW(), error_message=$2
      WHERE id=$1 AND status IN ('PENDING','PROCESSING')`,

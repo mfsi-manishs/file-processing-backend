@@ -3,8 +3,8 @@
  * @fileoverview Project repository
  */
 
-import { pool } from "../db/pool";
-import { type Project } from "../models/project.model";
+import { runQuery } from "../db/db.utils.js";
+import { type Project } from "../models/project.model.js";
 
 /**
  * @class ProjectRepository
@@ -18,12 +18,12 @@ export class ProjectRepository {
    * @returns {Promise<Project>} - The newly created project record
    */
   async create(name: string, description?: string): Promise<Project> {
-    const res = await pool.query(
+    const projects = await runQuery<Project>(
       `INSERT INTO projects(name, description) 
         VALUES ($1,$2) RETURNING *`,
       [name, description ?? null]
     );
-    return res.rows[0];
+    return projects[0] as Project;
   }
 
   /**
@@ -32,8 +32,12 @@ export class ProjectRepository {
    * @returns {Promise<Project | null>} - The project record if found, otherwise null.
    */
   async findById(id: number): Promise<Project | null> {
-    const res = await pool.query(`SELECT * FROM projects WHERE id=$1`, [id]);
-    return res.rows[0] || null;
+    const projects = await runQuery<Project>(
+      `SELECT * FROM projects
+       WHERE id=$1`,
+      [id]
+    );
+    return projects[0] || null;
   }
 
   /**
@@ -41,7 +45,38 @@ export class ProjectRepository {
    * @returns {Promise<Project[]>} - An array of project records.
    */
   async list(): Promise<Project[]> {
-    const res = await pool.query(`SELECT * FROM projects ORDER BY created_at DESC`);
-    return res.rows;
+    return await runQuery<Project>(
+      `SELECT * FROM projects
+       ORDER BY created_at DESC`
+    );
+  }
+
+  /**
+   * Updates a project record in the database.
+   * @param {number} id - The ID of the project to update.
+   * @param {string} name - The new name of the project.
+   * @param {string} [description] - The new description of the project, or undefined if no description update is needed.
+   * @returns {Promise<Project>} - The updated project record if the update was successful, otherwise null.
+   */
+  async update(id: number, name: string, description?: string): Promise<Project> {
+    const projects = await runQuery<Project>(
+      `UPDATE projects SET name=$2, description=$3
+       WHERE id=$1 RETURNING *`,
+      [id, name, description ?? null]
+    );
+    return projects[0] as Project;
+  }
+
+  /**
+   * Deletes a project record from the database.
+   * @param {number} id - The ID of the project to delete.
+   * @returns {Promise<void>} - A promise that resolves when the project has been deleted.
+   */
+  async delete(id: number): Promise<void> {
+    await runQuery<Project>(
+      `DELETE FROM projects
+       WHERE id=$1`,
+      [id]
+    );
   }
 }

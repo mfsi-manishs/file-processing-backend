@@ -4,7 +4,13 @@
  */
 
 import { Worker } from "worker_threads";
-import { pool } from "../db/pool";
+import { pool } from "../db/pool.js";
+import type { Job } from "../models/job.model.js";
+import { getNextPendingJob } from "../services/jobs.service.js";
+
+type WorkerRequestMessage = { type: "request-job" };
+type WorkerJobMessage = { type: "job"; job: Job | null };
+type WorkerMessage = WorkerRequestMessage | WorkerJobMessage;
 
 /**
  * Starts a worker pool with the given size.
@@ -22,19 +28,31 @@ export function startWorkerPool({ size }: { size: number }) {
  * Listens for "exit" events and respawns the worker if it exited with a non-zero code.
  */
 function spawnWorker() {
-  const worker = new Worker(require.resolve("./jobWorker.js"));
-  worker.on("message", async (msg) => {
+  const worker = new Worker(new URL("./job-worker.js", import.meta.url));
+
+  worker.on("message", async (msg: WorkerMessage) => {
     if (msg.type === "request-job") {
       const client = await pool.connect();
       try {
-        const job = await require("../services/jobsService").claimNextPendingJob(client);
+        const job = await getNextPendingJob(client);
         worker.postMessage({ type: "job", job });
+      } catch (err) {
+        console.error("Error fetching job:", err);
+        worker.postMessage({ type: "job", job: null });
       } finally {
         client.release();
       }
     }
   });
+
   worker.on("exit", (code) => {
-    if (code !== 0) spawnWorker(); // respawn on crash
+    if (code !== 0) {
+      console.error(`Worker crashed with code ${code}, respawning...`);
+      spawnWorker();
+    }
+  });
+
+  worker.on("error", (err) => {
+    console.error("Worker error:", err);
   });
 }

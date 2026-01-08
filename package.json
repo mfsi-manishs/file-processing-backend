@@ -2,9 +2,20 @@
   "name": "file-processing-backend",
   "version": "1.0.0",
   "description": "**A Project-Centric File Processing Backend using Node.js**",
-  "main": "index.js",
+  "main": "app.ts",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "clean": "rimraf dist",
+    "dev": "nodemon --watch src --exec ts-node src/app.ts",
+    "build": "tsc",
+    "start": "node dist/app.js",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "lint": "eslint 'src/**/*.{ts,tsx}' --fix",
+    "debug": "nodemon --inspect --watch src --exec ts-node src/app.ts",
+    "migration:run": "ts-node ./node_modules/typeorm/cli.js migration:run",
+    "migration:revert": "ts-node ./node_modules/typeorm/cli.js migration:revert",
+    "migration:generate": "ts-node ./node_modules/typeorm/cli.js migration:generate -n",
+    "db:reset": "npm run migration:revert && npm run migration:run"
   },
   "repository": {
     "type": "git",
@@ -13,20 +24,26 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
+  "type": "module",
   "bugs": {
     "url": "https://github.com/mfsi-manishs/file-processing-backend/issues"
   },
   "homepage": "https://github.com/mfsi-manishs/file-processing-backend#readme",
   "devDependencies": {
+    "@types/archiver": "^7.0.0",
     "@types/express": "^5.0.6",
+    "@types/morgan": "^1.9.10",
     "@types/multer": "^2.0.0",
     "@types/node": "^25.0.3",
     "@types/pg": "^8.16.0",
+    "archiver": "^7.0.1",
+    "dotenv": "^17.2.3",
     "express": "^5.2.1",
+    "morgan": "^1.10.1",
     "multer": "^2.0.2",
     "nodemon": "^3.1.11",
     "pg": "^8.16.3",
+    "rimraf": "^6.1.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3"
   }

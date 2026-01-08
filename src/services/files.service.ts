@@ -6,7 +6,7 @@
 import crypto from "crypto";
 import fs from "fs/promises";
 import path from "path";
-import { pool } from "../db/pool";
+import { pool } from "../db/pool.js";
 
 /**
  * Saves an uploaded file to the database and file system
@@ -15,9 +15,9 @@ import { pool } from "../db/pool";
  * @returns The newly created file record
  * @throws Error if the file could not be saved
  */
-export async function saveUploadedFile(projectId: number, file: Express.Multer.File) {
+export async function saveUploadedFile(projectId: number, file: Express.Multer.File): Promise<File> {
   const checksum = await hashFile(file.path);
-  const storagePath = path.resolve(file.path); // or move to final location
+  const storagePath = path.resolve(file.path);
   const res = await pool.query(
     `INSERT INTO files(project_id, file_name, file_path, file_type, file_size, checksum)
      VALUES ($1,$2,$3,$4,$5,$6)
@@ -29,9 +29,8 @@ export async function saveUploadedFile(projectId: number, file: Express.Multer.F
 
 /**
  * Computes the SHA-256 hash of a file
- * @param {string} p - the path to the file to be hashed
- * @returns {Promise<string>} - a promise resolving to the hex string representation of the hash
- * @throws {Error} - an error occurred while reading the file
+ * @param {string} p - the path to the file
+ * @returns {Promise<string>} - a promise that resolves with the hash
  */
 async function hashFile(p: string) {
   const hash = crypto.createHash("sha256");

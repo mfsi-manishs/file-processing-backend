@@ -5,8 +5,11 @@
 import fs from "fs";
 import path from "path";
 import { parentPort } from "worker_threads";
-import { pool } from "../db/pool";
-import { completeJobWithOutput, failJob, updateJobProgress } from "../services/jobs.service";
+import { runQuery } from "../db/db.utils.js";
+import { type File } from "../models/file.model.js";
+import type { Job } from "../models/job.model.js";
+import { completeJobWithOutput, failJob, updateJobProgress } from "../services/jobs.service.js";
+import { archiveFiles } from "../utils/utils.js";
 
 /**
  * Runs the job worker.
@@ -43,36 +46,48 @@ async function run() {
  * Gathers files for the project, creates a ZIP file, and inserts output file metadata.
  * @param job The job to process.
  */
-async function processJob(job: any) {
-  // Simulate work: compress project files to ZIP, or based on job.type
-  await updateJobProgress(job.id, 10);
-
-  // Gather files for project
-  const filesRes = await pool.query(
-    `SELECT id, filename, storage_path FROM files
-     WHERE project_id=$1 AND is_output=false`,
-    [job.project_id]
+async function processJob(job: Job) {
+  // Get all files for the job from the database
+  const jobFiles = await runQuery<File>(
+    `SELECT id, file_name, file_path FROM jobs_files
+     WHERE job_id=$1`,
+    [job.id]
   );
 
-  // Create ZIP (pseudo): write a tar/zip file
-  const outputPath = path.resolve(process.env.OUTPUT_DIR || "outputs", `job-${job.id}.zip`);
-  // Create ZIP using a library like archiver; here simplified
-  fs.writeFileSync(outputPath, Buffer.from("ZIP-CONTENT")); // placeholder
+  // Create ZIP output
+  const outputPath = path.resolve(process.env.OUTPUT_DIR || "./outputs", `job-${job.id}.zip`);
+  const output = fs.createWriteStream(outputPath);
 
-  await updateJobProgress(job.id, 80);
+  await archiveFiles(
+    jobFiles.map((f) => ({ name: f.fileName, path: f.filePath })),
+    output,
+    {
+      compressionLevel: 6,
+      onProgress: (percent: number) => {
+        updateJobProgress(job.id, percent);
+      },
+    }
+  );
+
+  // Check output zip file and it's size
+  const stats = fs.statSync(outputPath);
+  if (stats.size === 0) {
+    throw new Error("No output file created");
+  }
 
   // Insert output file metadata
-  const fileRes = await pool.query(
-    `INSERT INTO files(project_id, filename, storage_path, mime_type, size_bytes, is_output)
+  await runQuery<number>(
+    `INSERT INTO files(project_id, file_name, file_path, file_type, file_size, is_output)
      VALUES ($1,$2,$3,'application/zip', $4, true)
      RETURNING id`,
-    [job.project_id, `job-${job.id}.zip`, outputPath, 12] // replace size with actual
+    [job.projectId, `job-${job.id}.zip`, outputPath, stats.size]
   );
 
   await completeJobWithOutput(job.id);
 }
 
 run().catch((err) => {
+  console.error(err);
   // Let the worker exit to be respawned
   process.exit(1);
 });

@@ -3,7 +3,7 @@
  * @fileoverview Job model
  */
 
-import type { File } from "./file.model";
+import type { File } from "./file.model.js";
 
 /**
  * @enum JobType

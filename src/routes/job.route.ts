@@ -20,12 +20,19 @@ export default function filesRouter() {
 
   /**
    * Queues a new job and returns the newly created job record
+   * Throws an error if the job could not be created
+   * @param {number} projectId - The ID of the project to which the job belongs
+   * @body {number[]} fileIds - The IDs of the input files for the job
+   * @returns {Job} The newly created job
+   * @throws {Error} If the job could not be created
+   * @route POST /:projectId/jobs/zip
+   * @group Jobs
    */
-  router.post("/:projectId/jobs", async (req, res) => {
+  router.post("/:projectId/jobs/zip", async (req, res) => {
     const projectId = Number(req.params.projectId);
-    const { type, input_file_id } = req.body;
+    const { fileIds } = req.body;
     try {
-      const job = await queueJob(projectId, type, input_file_id);
+      const job = await queueJob(projectId, "ZIP_COMPRESSION", fileIds);
       res.status(201).json(job);
     } catch (e: any) {
       res.status(400).json({ error: e.message });
@@ -33,8 +40,13 @@ export default function filesRouter() {
   });
 
   /**
-   * Lists all jobs belonging to a project
-   * Optional query parameter `status` to filter by status
+   * Lists all jobs of a project.
+   * If status is provided, only jobs with that status are returned
+   * @param {number} projectId - The ID of the project
+   * @query {string} status - The status of the job [OPTIONAL]
+   * @returns {Job[]} An array of jobs
+   * @route GET /:projectId/jobs
+   * @group Jobs
    */
   router.get("/:projectId/jobs", async (req, res) => {
     const projectId = Number(req.params.projectId);

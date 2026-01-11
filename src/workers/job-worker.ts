@@ -5,9 +5,10 @@
 import fs from "fs";
 import path from "path";
 import { parentPort } from "worker_threads";
-import { runQuery } from "../db/db.utils.js";
-import { type File } from "../models/file.model.js";
 import type { Job } from "../models/job.model.js";
+import { FileRepository } from "../repositories/file.repo.js";
+import { JobsFilesRepository } from "../repositories/jobs-files.repo.js";
+import { hashFile } from "../services/files.service.js";
 import { completeJobWithOutput, failJob, updateJobProgress } from "../services/jobs.service.js";
 import { archiveFiles } from "../utils/utils.js";
 
@@ -48,14 +49,12 @@ async function run() {
  */
 async function processJob(job: Job) {
   // Get all files for the job from the database
-  const jobFiles = await runQuery<File>(
-    `SELECT id, file_name, file_path FROM jobs_files
-     WHERE job_id=$1`,
-    [job.id]
-  );
+  const jobFiles = await new JobsFilesRepository().getJobFiles(job.id);
 
   // Create ZIP output
   const outputPath = path.resolve(process.env.OUTPUT_DIR || "./outputs", `job-${job.id}.zip`);
+  const outputDir = path.dirname(outputPath);
+  await fs.promises.mkdir(outputDir, { recursive: true });
   const output = fs.createWriteStream(outputPath);
 
   await archiveFiles(
@@ -75,15 +74,20 @@ async function processJob(job: Job) {
     throw new Error("No output file created");
   }
 
-  // Insert output file metadata
-  await runQuery<number>(
-    `INSERT INTO files(project_id, file_name, file_path, file_type, file_size, is_output)
-     VALUES ($1,$2,$3,'application/zip', $4, true)
-     RETURNING id`,
-    [job.projectId, `job-${job.id}.zip`, outputPath, stats.size]
-  );
+  const checksum = await hashFile(outputPath);
 
-  await completeJobWithOutput(job.id);
+  // Insert output file metadata
+  const outputFile = await new FileRepository().create({
+    projectId: job.projectId,
+    fileName: `job-${job.id}.zip`,
+    filePath: outputPath,
+    fileSize: stats.size,
+    fileType: "application/zip",
+    checksum: checksum,
+    isOutput: true,
+  });
+
+  await completeJobWithOutput(job.id, outputFile.id);
 }
 
 run().catch((err) => {

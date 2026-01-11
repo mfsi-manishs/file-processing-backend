@@ -32,7 +32,7 @@ app.get("/", (req, res) => {
 // Register routes
 app.use("/api/projects", projectsRouter());
 app.use("/api/projects", filesRouter(upload));
-app.use("/api/projects", jobsRouter);
+app.use("/api/projects", jobsRouter());
 
 startWorkerPool({ size: Number(process.env.WORKER_COUNT) || 2 });
 

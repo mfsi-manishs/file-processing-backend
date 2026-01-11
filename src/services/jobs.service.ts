@@ -5,7 +5,10 @@
 
 import { runQuery } from "../db/db.utils.js";
 import { pool } from "../db/pool.js";
-import { type Job, type JobType } from "../models/job.model.js";
+import { getJobFromRows, type Job, type JobType } from "../models/job.model.js";
+import { FileRepository } from "../repositories/file.repo.js";
+import { JobRepository } from "../repositories/job.repo.js";
+import { JobsFilesRepository } from "../repositories/jobs-files.repo.js";
 
 /**
  * Queue a new job for processing.
@@ -21,39 +24,21 @@ export async function queueJob(projectId: number, type: JobType, inputFileIds: n
     await client.query("BEGIN");
 
     // Validate ownership of all input files
-    if (inputFileIds.length > 0) {
-      const check = await client.query(
-        `SELECT id FROM files 
-         WHERE id = ANY($1::int[]) AND project_id = $2`,
-        [inputFileIds, projectId]
-      );
+    if (!inputFileIds || inputFileIds.length === 0) {
+      throw new Error("No input files provided");
+    }
 
-      if (check.rowCount !== inputFileIds.length) {
-        throw new Error("One or more files do not belong to project");
-      }
+    const files = await new FileRepository().listByFiles(projectId, inputFileIds, client);
+    if (files.length !== inputFileIds.length) {
+      throw new Error("One or more files do not belong to project");
     }
 
     // Create/Insert new job
-    const jobRes = await client.query(
-      `INSERT INTO jobs(project_id, job_type, status)
-       VALUES ($1, $2, 'PENDING')
-       RETURNING *`,
-      [projectId, type]
-    );
-
-    if (jobRes.rowCount === 0) {
-      throw new Error("Failed to create job");
-    }
-
-    const job = jobRes.rows[0];
+    const job = await new JobRepository().create(projectId, type, client);
 
     // Batch insert input files into join/association/junction table.
     if (inputFileIds.length > 0) {
-      await client.query(
-        `INSERT INTO jobs_files(job_id, file_id)
-         SELECT $1, unnest($2::int[])`,
-        [job.id, inputFileIds]
-      );
+      await new JobsFilesRepository().addFiles(job.id, inputFileIds, client);
     }
 
     await client.query("COMMIT");
@@ -76,8 +61,7 @@ export async function getNextPendingJob(client: any): Promise<Job | null> {
   await client.query("BEGIN");
 
   const res = await client.query(
-    `SELECT id, project_id, job_type
-     FROM jobs
+    `SELECT * FROM jobs
      WHERE status='PENDING'
      ORDER BY created_at
      FOR UPDATE SKIP LOCKED
@@ -87,7 +71,7 @@ export async function getNextPendingJob(client: any): Promise<Job | null> {
     await client.query("ROLLBACK");
     return null;
   }
-  const job = res.rows[0];
+  const job = getJobFromRows(res.rows)[0] as Job;
   await client.query(
     `UPDATE jobs
      SET status='PROCESSING', started_at=NOW()
@@ -118,12 +102,12 @@ export async function updateJobProgress(jobId: number, progress: number) {
  * @param {number} jobId - The ID of the job to mark as completed.
  * @returns {Promise<void>} - A promise resolving to void when the update is complete.
  */
-export async function completeJobWithOutput(jobId: number) {
+export async function completeJobWithOutput(jobId: number, outputFileId: number) {
   await runQuery<Job>(
     `UPDATE jobs
-     SET status='COMPLETED', completed_at=NOW(), progress=100
+     SET status='COMPLETED', completed_at=NOW(), progress=100, output_file_id=$2
      WHERE id=$1 AND status='PROCESSING'`,
-    [jobId]
+    [jobId, outputFileId]
   );
 }
 

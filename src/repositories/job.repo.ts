@@ -3,9 +3,10 @@
  * @fileoverview Job repository
  */
 
+import type { PoolClient } from "pg";
 import { runQuery } from "../db/db.utils.js";
 import { pool } from "../db/pool.js";
-import { type Job } from "../models/job.model.js";
+import { type Job, type JobType } from "../models/job.model.js";
 
 /**
  * @class JobRepository
@@ -20,13 +21,13 @@ export class JobRepository {
    * @returns The newly created job.
    * @throws Error if the job could not be created.
    */
-  async create(projectId: number, type: string, inputFileIds: number[]): Promise<Job> {
+  async createAndAddFiles(projectId: number, type: string, inputFileIds: number[]): Promise<Job> {
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
 
       const jobRes = await client.query(
-        `INSERT INTO jobs(project_id, type, status)
+        `INSERT INTO jobs(project_id, job_type, status)
          VALUES ($1, $2, 'PENDING')
          RETURNING *`,
         [projectId, type]
@@ -49,6 +50,27 @@ export class JobRepository {
     } finally {
       client.release();
     }
+  }
+
+  /**
+   * Creates a new job in the database.
+   * @param projectId The ID of the project to which the job belongs.
+   * @param jobType The type of the job.
+   * @param [client] Optional PostgreSQL client to use for the transaction.
+   * @returns A promise resolving to the newly created job.
+   * @throws Error if the job could not be created.
+   */
+  async create(projectId: number, jobType: JobType, client?: PoolClient): Promise<Job> {
+    const query = `INSERT INTO jobs(project_id, job_type, status)
+                   VALUES ($1, $2, 'PENDING')
+                   RETURNING *`;
+    const params = [projectId, jobType];
+    if (client) {
+      const jobRes = await client.query(query, params);
+      return jobRes.rows[0];
+    }
+    const jobs = await runQuery<Job>(query, params);
+    return jobs[0] as Job;
   }
 
   /**

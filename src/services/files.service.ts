@@ -41,7 +41,7 @@ export async function saveUploadedFile(projectId: number, file: Express.Multer.F
  * @param {string} p - the path to the file
  * @returns {Promise<string>} - a promise that resolves with the hash
  */
-async function hashFile(p: string) {
+export async function hashFile(p: string) {
   const hash = crypto.createHash("sha256");
   const fh = await fs.open(p, "r");
   const stream = fh.createReadStream();

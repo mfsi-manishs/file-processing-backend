@@ -3,8 +3,9 @@
  * @fileoverview Project repository
  */
 
-import { runQuery } from "../db/db.utils.js";
-import { type Project } from "../models/project.model.js";
+import { type Queryable } from "../db/db.utils.js";
+import { pool } from "../db/pool.js";
+import { getProjectsFromRows, getProjectsWithFilesFromRows, type Project } from "../models/project.model.js";
 
 /**
  * @class ProjectRepository
@@ -15,25 +16,36 @@ export class ProjectRepository {
    * Creates a new project record in the database
    * @param {string} name - The name of the project
    * @param {string} [description] - The description of the project
-   * @returns {Promise<Project>} - The newly created project record
+   * @param {Queryable} [db] - The PostgreSQL client to use for the transaction
+   * @returns {Promise<Project>} - The newly created project record if the creation was successful
+   * @throws {Error} if the project could not be created
    */
-  async create(name: string, description?: string): Promise<Project> {
-    const projects = await runQuery<Project>(
+  async create(name: string, description?: string, db: Queryable = pool): Promise<Project> {
+    const result = await db.query(
       `INSERT INTO projects(name, description) 
         VALUES ($1,$2) RETURNING *`,
       [name, description ?? null]
     );
-    return projects[0] as Project;
+
+    const project = getProjectsFromRows(result.rows)[0];
+    if (!project) {
+      throw new Error("Failed to create project");
+    }
+    return project;
   }
 
   /**
    * Finds a project by its ID.
    * @param {number} id - The ID of the project to find.
-   * @returns {Promise<Project | null>} - The project record if found, otherwise null.
+   * @param {string} [include] - The field to include in the result.
+   * If "fileCount" is specified, the result will include the count of files in the project.
+   * @param {Queryable} [db] - The PostgreSQL client to use for the transaction
+   * @returns {Promise<Project | (Project & number)>} - The project record if found.
+   * @throws {Error} if the project could not be found.
    */
-  async getById(id: number, include?: string): Promise<Project | (Project & number)> {
+  async getById(id: number, include?: string, db: Queryable = pool): Promise<Project | (Project & number)> {
     if (include && include === "fileCount") {
-      const results = await runQuery<Project & number>(
+      const results = await db.query(
         `SELECT p.*, COALESCE(fc.file_count,0) AS file_count
          FROM projects p
          LEFT JOIN (
@@ -44,28 +56,37 @@ export class ProjectRepository {
          WHERE p.id = $1`,
         [id]
       );
-      if (results.length === 0) throw new Error("Not found");
-      return results[0] as Project & number;
+      const project = getProjectsWithFilesFromRows(results.rows)[0];
+      if (!project) throw new Error("Not found");
+      return project;
     } else {
-      const projects = await runQuery<Project>(
+      const result = await db.query(
         `SELECT * FROM projects
          WHERE id=$1`,
         [id]
       );
-      if (projects.length === 0) throw new Error("Not found");
-      return projects[0] as Project;
+      const project = getProjectsFromRows(result.rows)[0];
+      if (!project) throw new Error("Not found");
+      return project;
     }
   }
 
   /**
    * Lists all projects in the database in descending order of creation time.
+   * @param {Queryable} [db] - The PostgreSQL client to use for the transaction
    * @returns {Promise<Project[]>} - An array of project records.
+   * @throws {Error} If no projects are found.
    */
-  async list(): Promise<Project[]> {
-    return await runQuery<Project>(
+  async list(db: Queryable = pool): Promise<Project[]> {
+    const result = await db.query(
       `SELECT * FROM projects
        ORDER BY created_at DESC`
     );
+    const projects = getProjectsFromRows(result.rows);
+    if (projects.length === 0) {
+      throw new Error("No projects found");
+    }
+    return projects;
   }
 
   /**
@@ -73,9 +94,11 @@ export class ProjectRepository {
    * @param {number} id - The ID of the project to update.
    * @param {string} name - The new name of the project.
    * @param {string} [description] - The new description of the project, or undefined if no description update is needed.
-   * @returns {Promise<Project[]>} - The updated project record if the update was successful, otherwise null.
+   * @param {Queryable} [db] - The PostgreSQL client to use for the transaction
+   * @returns {Promise<Project[]>} - The updated project record if the update was successful.
+   * @throws {Error} If the project record could not be found or updated.
    */
-  async update(id: number, name: string, description?: string): Promise<Project[]> {
+  async update(id: number, name: string, description?: string, db: Queryable = pool): Promise<Project[]> {
     const updates: string[] = [];
     const values: any[] = [id];
 
@@ -105,7 +128,8 @@ export class ProjectRepository {
       WHERE id = $1 
       RETURNING *`;
 
-    const projects = await runQuery<Project>(query, values);
+    const result = await db.query(query, values);
+    const projects = getProjectsFromRows(result.rows);
     if (projects.length === 0) {
       throw new Error("Project not updated or found");
     }
@@ -116,13 +140,21 @@ export class ProjectRepository {
   /**
    * Deletes a project record from the database.
    * @param {number} id - The ID of the project to delete.
-   * @returns {Promise<void>} - A promise that resolves when the project has been deleted.
+   * @param {Queryable} [db] - The PostgreSQL client to use for the transaction.
+   * @returns {Promise<Project>} - A promise that resolves with the deleted project record if the deletion was successful.
+   * @throws {Error} If the project record could not be found or deleted.
    */
-  async delete(id: number): Promise<void> {
-    await runQuery<Project>(
+  async delete(id: number, db: Queryable = pool): Promise<Project> {
+    const result = await db.query(
       `DELETE FROM projects
-       WHERE id=$1`,
+       WHERE id=$1
+       RETURNING *`,
       [id]
     );
+    const project = getProjectsFromRows(result.rows)[0];
+    if (!project) {
+      throw new Error("Project not deleted or found");
+    }
+    return project;
   }
 }

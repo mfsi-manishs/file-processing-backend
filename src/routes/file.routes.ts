@@ -62,7 +62,7 @@ export default function filesRouter(upload: Multer) {
     try {
       files = await new FileRepository().listByProject(projectId);
     } catch (error: unknown) {
-      return res.status(500).json({ error: error });
+      return res.status(500).json({ error: (error as Error).message });
     }
     return res.json(files);
   });
@@ -80,13 +80,13 @@ export default function filesRouter(upload: Multer) {
   router.delete("/:projectId/files/:fileId", async (req, res) => {
     const projectId = Number(req.params.projectId);
     const fileId = Number(req.params.fileId);
-    let files = [];
+    let file;
     try {
-      files = await new FileRepository().delete(projectId, fileId);
+      file = await new FileRepository().delete(projectId, fileId);
     } catch (error: unknown) {
-      return res.status(500).json({ error: error });
+      return res.status(500).json({ error: (error as Error).message });
     }
-    return res.json(files);
+    return res.json(file);
   });
 
   return router;

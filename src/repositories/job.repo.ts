@@ -3,10 +3,9 @@
  * @fileoverview Job repository
  */
 
-import type { PoolClient } from "pg";
-import { runQuery } from "../db/db.utils.js";
+import { type Queryable } from "../db/db.utils.js";
 import { pool } from "../db/pool.js";
-import { type Job, type JobType } from "../models/job.model.js";
+import { getJobFromRows, type Job, type JobType } from "../models/job.model.js";
 
 /**
  * @class JobRepository
@@ -53,51 +52,86 @@ export class JobRepository {
   }
 
   /**
-   * Creates a new job in the database.
+   * Creates a new job with the given project ID and job type.
    * @param projectId The ID of the project to which the job belongs.
    * @param jobType The type of the job.
-   * @param [client] Optional PostgreSQL client to use for the transaction.
+   * @param db Optional database client to use for the query. Defaults to the global pool.
    * @returns A promise resolving to the newly created job.
    * @throws Error if the job could not be created.
    */
-  async create(projectId: number, jobType: JobType, client?: PoolClient): Promise<Job> {
+  async create(projectId: number, jobType: JobType, db: Queryable = pool): Promise<Job> {
     const query = `INSERT INTO jobs(project_id, job_type, status)
                    VALUES ($1, $2, 'PENDING')
                    RETURNING *`;
     const params = [projectId, jobType];
-    if (client) {
-      const jobRes = await client.query(query, params);
-      return jobRes.rows[0];
-    }
-    const jobs = await runQuery<Job>(query, params);
-    return jobs[0] as Job;
+    const result = await db.query(query, params);
+    const job = getJobFromRows(result.rows)[0];
+    if (!job) throw new Error("Failed to create job");
+    return job;
   }
 
   /**
-   * Finds all active jobs for a project.
-   * @param projectId The ID of the project.
-   * @returns A promise resolving to an array of active jobs.
+   * Finds all active jobs for a given project.
+   * @param projectId The ID of the project to find active jobs for.
+   * @param db Optional database client to use for the query. Defaults to the global pool.
+   * @returns A promise resolving to an array of active jobs for the given project.
+   * @throws Error if no active jobs could be found.
    */
-  async findActiveByProject(projectId: number): Promise<Job[]> {
-    return await runQuery<Job>(
+  async findActiveByProject(projectId: number, db: Queryable = pool): Promise<Job[]> {
+    const result = await db.query(
       `SELECT * FROM jobs
        WHERE project_id=$1 AND status IN ('PENDING','PROCESSING')`,
       [projectId]
     );
+    const jobs = getJobFromRows(result.rows);
+    if (!jobs || jobs.length === 0) throw new Error("Failed to find active jobs");
+    return jobs;
+  }
+
+  /**
+   * Finds all jobs for a given project, optionally filtered by status.
+   * @param projectId The ID of the project to find jobs for.
+   * @param [status] Optional status to filter the jobs by.
+   * @param [db] Optional database client to use for the query. Defaults to the global pool.
+   * @returns A promise resolving to an array of jobs for the given project.
+   * @throws Error if no jobs could be found.
+   */
+  async findByProject(projectId: number, status?: string, db: Queryable = pool): Promise<Job[]> {
+    const params: [number, string?] = [projectId];
+    let where = "project_id = $1";
+    if (status) {
+      where += " AND status = $2";
+      params.push(status);
+    }
+
+    const result = await db.query(
+      `SELECT * FROM jobs
+      WHERE ${where} ORDER BY created_at DESC`,
+      params
+    );
+    const jobs = getJobFromRows(result.rows);
+    if (!jobs || jobs.length === 0) throw new Error("Failed to find jobs");
+    return jobs;
   }
 
   /**
    * Updates the status and progress of a job.
    * @param jobId The ID of the job to update.
    * @param status The new status of the job.
-   * @param progress The new progress of the job, or undefined if no progress update is needed.
-   * @returns A promise resolving to void when the update is complete.
+   * @param progress Optional progress value to update the job with.
+   * @param db Optional database client to use for the query. Defaults to the global pool.
+   * @returns A promise resolving to the updated job.
+   * @throws Error if the job could not be updated.
    */
-  async updateStatus(jobId: number, status: string, progress?: number): Promise<void> {
-    await runQuery<void>(
+  async updateStatus(jobId: number, status: string, progress?: number, db: Queryable = pool): Promise<Job> {
+    const result = await db.query(
       `UPDATE jobs SET status=$2, progress=COALESCE($3, progress)
-       WHERE id=$1`,
+       WHERE id=$1
+       RETURNING *`,
       [jobId, status, progress ?? null]
     );
+    const job = getJobFromRows(result.rows)[0];
+    if (!job) throw new Error("Failed to update job");
+    return job;
   }
 }

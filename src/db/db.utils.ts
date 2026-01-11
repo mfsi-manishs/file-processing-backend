@@ -1,5 +1,17 @@
-import type { PoolClient } from "pg";
+import type { PoolClient, QueryConfigValues, QueryResult, QueryResultRow } from "pg";
 import { pool } from "./pool.js";
+
+/**
+ * Queryable is a custom TypeScript interface used to treat the database Pool and an individual
+ * PoolClient (used for transactions) as the same thing.
+ * It works by leveraging a concept called Structural Typing (or "Duck Typing").
+ * Both the Pool and PoolClient in the pg library have a .query() method with the same signature.
+ * Instead of writing separate functions for single queries and transactions,
+ * this interface can be used to create a single function that can be used for both.
+ */
+export interface Queryable {
+  query<R extends QueryResultRow = any, I = any[]>(queryTextOrConfig: string, values?: QueryConfigValues<I>): Promise<QueryResult<R>>;
+}
 
 /**
  * Runs a query safely with centralized error handling.

@@ -4,8 +4,7 @@
  */
 
 import { Router } from "express";
-import { runQuery } from "../db/db.utils.js";
-import type { Job } from "../models/job.model.js";
+import { JobRepository } from "../repositories/job.repo.js";
 import { queueJob } from "../services/jobs.service.js";
 
 /**
@@ -51,19 +50,12 @@ export default function filesRouter() {
   router.get("/:projectId/jobs", async (req, res) => {
     const projectId = Number(req.params.projectId);
     const status = req.query.status as string | undefined;
-    const params: [number, string?] = [projectId];
-    let where = "project_id = $1";
-    if (status) {
-      where += " AND status = $2";
-      params.push(status);
+    try {
+      const jobs = await new JobRepository().findByProject(projectId, status);
+      res.json(jobs);
+    } catch (error) {
+      res.status(500).json({ error: (error as Error).message });
     }
-
-    const jobs = await runQuery<Job>(
-      `SELECT * FROM jobs
-       WHERE ${where} ORDER BY created_at DESC`,
-      params
-    );
-    res.json(jobs);
   });
 
   return router;

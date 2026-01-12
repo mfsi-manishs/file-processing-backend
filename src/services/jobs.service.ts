@@ -3,9 +3,8 @@
  * @fileoverview Job service
  */
 
-import { runQuery } from "../db/db.utils.js";
-import { pool } from "../db/pool.js";
-import { getJobFromRows, type Job, type JobType } from "../models/job.model.js";
+import { runQueriesAsTransaction } from "../db/db.utils.js";
+import { type Job, type JobType } from "../models/job.model.js";
 import { FileRepository } from "../repositories/file.repo.js";
 import { JobRepository } from "../repositories/job.repo.js";
 import { JobsFilesRepository } from "../repositories/jobs-files.repo.js";
@@ -19,109 +18,78 @@ import { JobsFilesRepository } from "../repositories/jobs-files.repo.js";
  * @throws Error if the job could not be created.
  */
 export async function queueJob(projectId: number, type: JobType, inputFileIds: number[]): Promise<Job> {
-  const client = await pool.connect();
   try {
-    await client.query("BEGIN");
+    const job = await runQueriesAsTransaction(async (client) => {
+      // Validate ownership of all input files
+      const files = await new FileRepository().listByFiles(projectId, inputFileIds, client);
+      if (files.length !== inputFileIds.length) {
+        throw new Error("One or more files do not belong to project");
+      }
 
-    // Validate ownership of all input files
-    if (!inputFileIds || inputFileIds.length === 0) {
-      throw new Error("No input files provided");
-    }
+      // Create/Insert new job
+      const job = await new JobRepository().create(projectId, type, client);
 
-    const files = await new FileRepository().listByFiles(projectId, inputFileIds, client);
-    if (files.length !== inputFileIds.length) {
-      throw new Error("One or more files do not belong to project");
-    }
-
-    // Create/Insert new job
-    const job = await new JobRepository().create(projectId, type, client);
-
-    // Batch insert input files into join/association/junction table.
-    if (inputFileIds.length > 0) {
-      await new JobsFilesRepository().addFiles(job.id, inputFileIds, client);
-    }
-
-    await client.query("COMMIT");
+      // Batch insert input files into join/association/junction table.
+      if (inputFileIds.length > 0) {
+        await new JobsFilesRepository().addFiles(job.id, inputFileIds, client);
+      }
+      return job;
+    });
     return job;
-  } catch (err) {
-    await client.query("ROLLBACK");
-    throw err;
-  } finally {
-    client.release();
+  } catch (error) {
+    throw error;
   }
 }
 
 /**
  * Retrieves the next pending job from the database and marks it as 'PROCESSING'
- * @param {any} client - The database client to use for the transaction
  * @returns {Promise<Job | null>} - The next pending job, or null if none is found
  */
-export async function getNextPendingJob(client: any): Promise<Job | null> {
-  // Use a transaction and SKIP LOCKED to avoid contention among workers
-  await client.query("BEGIN");
-
-  const res = await client.query(
-    `SELECT * FROM jobs
-     WHERE status='PENDING'
-     ORDER BY created_at
-     FOR UPDATE SKIP LOCKED
-     LIMIT 1`
-  );
-  if (res.rowCount === 0) {
-    await client.query("ROLLBACK");
+export async function getNextPendingJob(): Promise<Job | null> {
+  try {
+    return await runQueriesAsTransaction(async (client) => {
+      const jobs = await new JobRepository().getPendingJobs(client);
+      if (jobs.length === 0) return null;
+      const job = jobs[0];
+      if (!job) return null;
+      await new JobRepository().updateStatusStarted(job.projectId, job.id, client);
+      return job;
+    });
+  } catch (error) {
     return null;
   }
-  const job = getJobFromRows(res.rows)[0] as Job;
-  await client.query(
-    `UPDATE jobs
-     SET status='PROCESSING', started_at=NOW()
-     WHERE id=$1`,
-    [job.id]
-  );
-  await client.query("COMMIT");
-  return job;
 }
 
 /**
  * Updates the progress of a job that is currently in the 'PROCESSING' status.
+ * @param projectId The ID of the project to which the job belongs.
  * @param {number} jobId - The ID of the job to update.
  * @param {number} progress - The new progress value (0-100) for the job.
  * @returns {Promise<void>} - A promise resolving to void when the update is complete.
  */
-export async function updateJobProgress(jobId: number, progress: number) {
-  await runQuery<Job>(
-    `UPDATE jobs
-     SET progress=$2
-     WHERE id=$1 AND status='PROCESSING'`,
-    [jobId, progress]
-  );
+export async function updateJobProgress(projectId: number, jobId: number, progress: number) {
+  await new JobRepository().updateJobProgress(projectId, jobId, progress);
 }
 
 /**
- * Marks a job as 'COMPLETED' and sets its progress to 100.
- * @param {number} jobId - The ID of the job to mark as completed.
+ * Marks a job as 'COMPLETED' and sets its completion time to the current timestamp, its progress to 100, and its output file ID.
+ * @param projectId The ID of the project to which the job belongs.
+ * @param jobId The ID of the job to complete.
+ * @param outputFileId The ID of the output file associated with the job.
  * @returns {Promise<void>} - A promise resolving to void when the update is complete.
+ * @throws Error if the job could not be completed.
  */
-export async function completeJobWithOutput(jobId: number, outputFileId: number) {
-  await runQuery<Job>(
-    `UPDATE jobs
-     SET status='COMPLETED', completed_at=NOW(), progress=100, output_file_id=$2
-     WHERE id=$1 AND status='PROCESSING'`,
-    [jobId, outputFileId]
-  );
+export async function completeJobWithOutput(projectId: number, jobId: number, outputFileId: number) {
+  await new JobRepository().updateStatusCompleted(projectId, jobId, outputFileId);
 }
 
 /**
  * Marks a job as 'FAILED' and sets its error message.
+ * @param projectId The ID of the project to which the job belongs.
  * @param {number} jobId - The ID of the job to mark as failed.
  * @param {string} message - The error message to associate with the job.
  * @returns {Promise<void>} - A promise resolving to void when the update is complete.
  */
-export async function failJob(jobId: number, message: string) {
-  await runQuery<Job>(
-    `UPDATE jobs
-     SET status='FAILED', completed_at=NOW(), error_message=$2
-     WHERE id=$1 AND status IN ('PENDING','PROCESSING')`,
-    [jobId, message]
-  );
+export async function failJob(projectId: number, jobId: number, message: string) {
+  await new JobRepository().updateStatusFailed(projectId, jobId, message);
 }

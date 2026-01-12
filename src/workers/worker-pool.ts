@@ -4,7 +4,6 @@
  */
 
 import { Worker } from "worker_threads";
-import { pool } from "../db/pool.js";
 import type { Job } from "../models/job.model.js";
 import { getNextPendingJob } from "../services/jobs.service.js";
 
@@ -32,15 +31,12 @@ function spawnWorker() {
 
   worker.on("message", async (msg: WorkerMessage) => {
     if (msg.type === "request-job") {
-      const client = await pool.connect();
       try {
-        const job = await getNextPendingJob(client);
+        const job = await getNextPendingJob();
         worker.postMessage({ type: "job", job });
       } catch (err) {
         console.error("Error fetching job:", err);
         worker.postMessage({ type: "job", job: null });
-      } finally {
-        client.release();
       }
     }
   });

@@ -33,7 +33,7 @@ async function run() {
       try {
         await processJob(job);
       } catch (e: any) {
-        await failJob(job.id, e.message || "Unknown error");
+        await failJob(job.projectId, job.id, e.message || "Unknown error");
       } finally {
         setImmediate(() => parentPort!.postMessage({ type: "request-job" }));
       }
@@ -63,7 +63,7 @@ async function processJob(job: Job) {
     {
       compressionLevel: 6,
       onProgress: (percent: number) => {
-        updateJobProgress(job.id, percent);
+        updateJobProgress(job.projectId, job.id, percent);
       },
     }
   );
@@ -87,7 +87,7 @@ async function processJob(job: Job) {
     isOutput: true,
   });
 
-  await completeJobWithOutput(job.id, outputFile.id);
+  await completeJobWithOutput(job.projectId, job.id, outputFile.id);
 }
 
 run().catch((err) => {

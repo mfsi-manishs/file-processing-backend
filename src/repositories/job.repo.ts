@@ -115,20 +115,101 @@ export class JobRepository {
   }
 
   /**
-   * Updates the status and progress of a job.
+   * Retrieves the next pending job from the database and marks it as 'PROCESSING'
+   * @param [db] Optional database client to use for the query. Defaults to the global pool.
+   * @returns A promise resolving to the next pending job, or an empty array if none is found.
+   * @throws Error if the job could not be found or updated.
+   */
+  async getPendingJobs(db: Queryable = pool): Promise<Job[]> {
+    const result = await db.query(
+      `SELECT * FROM jobs
+       WHERE status='PENDING'
+       ORDER BY created_at
+       FOR UPDATE SKIP LOCKED
+       LIMIT 1`
+    );
+    const jobs = getJobFromRows(result.rows);
+    if (!jobs) throw new Error("Failed to find pending jobs");
+    return jobs;
+  }
+
+  /**
+   * Updates the status and progress of a job with gien ID and status 'PROCESSING'.
+   * @param projectId The ID of the project to find jobs for.
    * @param jobId The ID of the job to update.
-   * @param status The new status of the job.
    * @param progress Optional progress value to update the job with.
    * @param db Optional database client to use for the query. Defaults to the global pool.
    * @returns A promise resolving to the updated job.
    * @throws Error if the job could not be updated.
    */
-  async updateStatus(jobId: number, status: string, progress?: number, db: Queryable = pool): Promise<Job> {
+  async updateJobProgress(projectId: number, jobId: number, progress?: number, db: Queryable = pool): Promise<Job> {
     const result = await db.query(
-      `UPDATE jobs SET status=$2, progress=COALESCE($3, progress)
-       WHERE id=$1
+      `UPDATE jobs SET progress=COALESCE($3, progress)
+       WHERE project_id=$1 AND id=$2 AND status='PROCESSING'
        RETURNING *`,
-      [jobId, status, progress ?? null]
+      [projectId, jobId, progress ?? null]
+    );
+    const job = getJobFromRows(result.rows)[0];
+    if (!job) throw new Error("Failed to update job");
+    return job;
+  }
+
+  /**
+   * Marks a job as 'PROCESSING' and sets its start time to the current timestamp.
+   * @param projectId The ID of the project to which the job belongs.
+   * @param jobId The ID of the job to update.
+   * @param db Optional database client to use for the query. Defaults to the global pool.
+   * @returns A promise resolving to the updated job.
+   * @throws Error if the job could not be updated.
+   */
+  async updateStatusStarted(projectId: number, jobId: number, db: Queryable = pool): Promise<Job> {
+    const result = await db.query(
+      `UPDATE jobs SET status='PROCESSING', started_at=NOW()
+       WHERE project_id=$1 AND id=$2
+       RETURNING *`,
+      [projectId, jobId]
+    );
+    const job = getJobFromRows(result.rows)[0];
+    if (!job) throw new Error("Failed to update job");
+    return job;
+  }
+
+  /**
+   * Marks a job as 'COMPLETED' and sets its completion time to the current timestamp and its progress to 100.
+   * @param projectId The ID of the project to which the job belongs.
+   * @param jobId The ID of the job to update.
+   * @param outputFileId The ID of the output file associated with the job.
+   * @param [db] Optional database client to use for the query. Defaults to the global pool.
+   * @returns A promise resolving to the updated job.
+   * @throws Error if the job could not be updated.
+   */
+  async updateStatusCompleted(projectId: number, jobId: number, outputFileId: number, db: Queryable = pool): Promise<Job> {
+    const result = await db.query(
+      `UPDATE jobs SET status='COMPLETED', completed_at=NOW(), progress=100, output_file_id=$3
+       WHERE project_id=$1 AND id=$2
+       RETURNING *`,
+      [projectId, jobId, outputFileId]
+    );
+    const job = getJobFromRows(result.rows)[0];
+    if (!job) throw new Error("Failed to update job");
+    return job;
+  }
+
+  /**
+   * Marks a job as 'FAILED' and sets its completion time to the current timestamp and its error message.
+   * @param projectId The ID of the project to which the job belongs.
+   * @param jobId The ID of the job to update.
+   * @param message The error message to associate with the job.
+   * @param [db] Optional database client to use for the query. Defaults to the global pool.
+   * @returns A promise resolving to the updated job.
+   * @throws Error if the job could not be updated.
+   */
+  async updateStatusFailed(projectId: number, jobId: number, message: string, db: Queryable = pool): Promise<Job> {
+    const result = await db.query(
+      `UPDATE jobs SET status='FAILED', completed_at=NOW(), error_message=$3
+       WHERE project_id=$1 AND id=$2 AND status IN ('PENDING','PROCESSING')
+       RETURNING *`,
+      [projectId, jobId, message]
     );
     const job = getJobFromRows(result.rows)[0];
     if (!job) throw new Error("Failed to update job");

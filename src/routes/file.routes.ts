@@ -6,7 +6,7 @@
 import { Router } from "express";
 import fs from "fs";
 import type { Multer } from "multer";
-import { runTransaction } from "../db/db.utils.js";
+import { runQueriesAsTransaction } from "../db/db.utils.js";
 import { FileRepository } from "../repositories/file.repo.js";
 import { saveUploadedFile } from "../services/files.service.js";
 
@@ -39,7 +39,7 @@ export default function filesRouter(upload: Multer) {
     }
 
     try {
-      const savedFiles = await runTransaction(async (client) => {
+      const savedFiles = await runQueriesAsTransaction(async (client) => {
         return Promise.all(files.map((file) => saveUploadedFile(projectId, file, client)));
       });
       return res.status(201).json(savedFiles);

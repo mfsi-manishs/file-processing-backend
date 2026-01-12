@@ -59,7 +59,7 @@ export async function runQuery<T = any>(query: string, params: any[] = []): Prom
  * and an error is thrown. The error is logged to the console for debugging purposes.
  * The database connection is released after the transaction is completed, regardless of whether an error occurred or not.
  */
-export async function runTransaction<T>(callback: (client: PoolClient) => Promise<T>): Promise<T> {
+export async function runQueriesAsTransaction<T>(callback: (client: PoolClient) => Promise<T>): Promise<T> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");

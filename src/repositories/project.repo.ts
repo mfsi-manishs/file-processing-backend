@@ -3,6 +3,7 @@
  * @fileoverview Project repository
  */
 
+import { ERR_MSG } from "../constants.js";
 import { type Queryable } from "../db/db.utils.js";
 import { pool } from "../db/pool.js";
 import { getProjectsFromRows, getProjectsWithFilesFromRows, type Project } from "../models/project.model.js";
@@ -29,7 +30,7 @@ export class ProjectRepository {
 
     const project = getProjectsFromRows(result.rows)[0];
     if (!project) {
-      throw new Error("Failed to create project");
+      throw new Error(ERR_MSG.FAILED_TO_CREATE_PROJECT_IN_DB);
     }
     return project;
   }
@@ -57,7 +58,7 @@ export class ProjectRepository {
         [id]
       );
       const project = getProjectsWithFilesFromRows(results.rows)[0];
-      if (!project) throw new Error("Not found");
+      if (!project) throw new Error(ERR_MSG.NOT_FOUND_IN_DB);
       return project;
     } else {
       const result = await db.query(
@@ -66,7 +67,7 @@ export class ProjectRepository {
         [id]
       );
       const project = getProjectsFromRows(result.rows)[0];
-      if (!project) throw new Error("Not found");
+      if (!project) throw new Error(ERR_MSG.NOT_FOUND_IN_DB);
       return project;
     }
   }
@@ -84,7 +85,7 @@ export class ProjectRepository {
     );
     const projects = getProjectsFromRows(result.rows);
     if (projects.length === 0) {
-      throw new Error("No projects found");
+      throw new Error(ERR_MSG.NO_PROJECTS_FOUND_IN_DB);
     }
     return projects;
   }
@@ -119,7 +120,7 @@ export class ProjectRepository {
 
     if (updates.length === 1) {
       // Only updated_at is present
-      throw new Error("No fields provided for update");
+      throw new Error(ERR_MSG.NO_FIELDS_PROVIDED_FOR_UPDATE);
     }
 
     const query = `
@@ -131,7 +132,7 @@ export class ProjectRepository {
     const result = await db.query(query, values);
     const projects = getProjectsFromRows(result.rows);
     if (projects.length === 0) {
-      throw new Error("Project not updated or found");
+      throw new Error(ERR_MSG.PROJECT_NOT_UPDATED_OR_FOUND_IN_DB);
     }
 
     return projects;
@@ -153,7 +154,7 @@ export class ProjectRepository {
     );
     const project = getProjectsFromRows(result.rows)[0];
     if (!project) {
-      throw new Error("Project not deleted or found");
+      throw new Error(ERR_MSG.PROJECT_NOT_DELETED_OR_FOUND_IN_DB);
     }
     return project;
   }

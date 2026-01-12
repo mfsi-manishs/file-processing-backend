@@ -3,6 +3,7 @@
  * @fileoverview JobsFiles repository
  */
 
+import { ERR_MSG } from "../constants.js";
 import { type Queryable } from "../db/db.utils.js";
 import { pool } from "../db/pool.js";
 import { getFilesFromRows, type File } from "../models/file.model.js";
@@ -27,7 +28,7 @@ export class JobsFilesRepository {
     const params = [jobId, fileIds];
     const result = await db.query(query, params);
     const jobsFiles = getJobsFilesFromRows(result.rows);
-    if (!jobsFiles || jobsFiles.length === 0) throw new Error("Failed to add files to job");
+    if (!jobsFiles || jobsFiles.length === 0) throw new Error(ERR_MSG.FAILED_TO_ADD_FILES_TO_JOB_IN_DB);
     return jobsFiles;
   }
 
@@ -46,7 +47,7 @@ export class JobsFilesRepository {
     const params = [jobId];
     const result = await db.query(query, params);
     const files = getFilesFromRows(result.rows);
-    if (!files || files.length === 0) throw new Error("Failed to get job files");
+    if (!files || files.length === 0) throw new Error(ERR_MSG.FAILED_TO_GET_JOB_FILES_FROM_DB);
     return files;
   }
 }

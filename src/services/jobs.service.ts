@@ -3,6 +3,7 @@
  * @fileoverview Job service
  */
 
+import { ERR_MSG } from "../constants.js";
 import { runQueriesAsTransaction } from "../db/db.utils.js";
 import { type Job, type JobType } from "../models/job.model.js";
 import { FileRepository } from "../repositories/file.repo.js";
@@ -23,7 +24,7 @@ export async function queueJob(projectId: number, type: JobType, inputFileIds: n
       // Validate ownership of all input files
       const files = await new FileRepository().listByFiles(projectId, inputFileIds, client);
       if (files.length !== inputFileIds.length) {
-        throw new Error("One or more files do not belong to project");
+        throw new Error(ERR_MSG.FILE_DOES_NOT_BELONG_TO_PROJECT);
       }
 
       // Create/Insert new job
@@ -37,7 +38,8 @@ export async function queueJob(projectId: number, type: JobType, inputFileIds: n
     });
     return job;
   } catch (error) {
-    throw error;
+    console.error(error);
+    throw new Error(ERR_MSG.FAILED_TO_QUEUE_JOB);
   }
 }
 
@@ -56,6 +58,7 @@ export async function getNextPendingJob(): Promise<Job | null> {
       return job;
     });
   } catch (error) {
+    console.error(error);
     return null;
   }
 }

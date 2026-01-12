@@ -5,6 +5,7 @@
 import fs from "fs";
 import path from "path";
 import { parentPort } from "worker_threads";
+import { ERR_MSG } from "../constants.js";
 import type { Job } from "../models/job.model.js";
 import { FileRepository } from "../repositories/file.repo.js";
 import { JobsFilesRepository } from "../repositories/jobs-files.repo.js";
@@ -33,7 +34,7 @@ async function run() {
       try {
         await processJob(job);
       } catch (e: any) {
-        await failJob(job.projectId, job.id, e.message || "Unknown error");
+        await failJob(job.projectId, job.id, e.message || ERR_MSG.UNKNOWN_ERROR_IN_RUN);
       } finally {
         setImmediate(() => parentPort!.postMessage({ type: "request-job" }));
       }
@@ -71,7 +72,7 @@ async function processJob(job: Job) {
   // Check output zip file and it's size
   const stats = fs.statSync(outputPath);
   if (stats.size === 0) {
-    throw new Error("No output file created");
+    throw new Error(ERR_MSG.NO_OUTPUT_FILE_CREATED);
   }
 
   const checksum = await hashFile(outputPath);

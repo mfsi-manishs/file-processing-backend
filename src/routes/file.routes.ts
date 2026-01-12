@@ -6,6 +6,7 @@
 import { Router } from "express";
 import fs from "fs";
 import type { Multer } from "multer";
+import { ERR_MSG } from "../constants.js";
 import { runQueriesAsTransaction } from "../db/db.utils.js";
 import { FileRepository } from "../repositories/file.repo.js";
 import { saveUploadedFile } from "../services/files.service.js";
@@ -33,9 +34,11 @@ export default function filesRouter(upload: Multer) {
    */
   router.post("/:projectId/files", upload.array("file", 10), async (req, res) => {
     const projectId = Number(req.params.projectId);
+    if (isNaN(projectId) || projectId <= 0) return res.status(400).json({ error: ERR_MSG.PROJECT_ID_IS_REQUIRED });
+
     const files = req.files as Express.Multer.File[];
     if (!files || files.length === 0) {
-      return res.status(400).json({ error: "No files" });
+      return res.status(400).json({ error: ERR_MSG.NO_FILES });
     }
 
     try {
@@ -58,6 +61,8 @@ export default function filesRouter(upload: Multer) {
    */
   router.get("/:projectId/files", async (req, res) => {
     const projectId = Number(req.params.projectId);
+    if (isNaN(projectId) || projectId <= 0) return res.status(400).json({ error: ERR_MSG.PROJECT_ID_IS_REQUIRED });
+
     let files = [];
     try {
       files = await new FileRepository().listByProject(projectId);
@@ -79,7 +84,11 @@ export default function filesRouter(upload: Multer) {
    */
   router.delete("/:projectId/files/:fileId", async (req, res) => {
     const projectId = Number(req.params.projectId);
+    if (isNaN(projectId) || projectId <= 0) return res.status(400).json({ error: ERR_MSG.PROJECT_ID_IS_REQUIRED });
+
     const fileId = Number(req.params.fileId);
+    if (isNaN(fileId) || fileId <= 0) return res.status(400).json({ error: ERR_MSG.ID_IS_REQUIRED });
+
     let file;
     try {
       file = await new FileRepository().delete(projectId, fileId);
@@ -101,14 +110,18 @@ export default function filesRouter(upload: Multer) {
    */
   router.get("/:projectId/files/:fileId/download", async (req, res) => {
     const projectId = Number(req.params.projectId);
+    if (isNaN(projectId) || projectId <= 0) return res.status(400).json({ error: ERR_MSG.PROJECT_ID_IS_REQUIRED });
+
     const fileId = Number(req.params.fileId);
+    if (isNaN(fileId) || fileId <= 0) return res.status(400).json({ error: ERR_MSG.ID_IS_REQUIRED });
+
     let file;
     try {
       file = await new FileRepository().getById(projectId, fileId);
     } catch (error: unknown) {
       return res.status(500).json({ error: (error as Error).message });
     }
-    if (!file) return res.status(404).json({ error: "File not found" });
+    if (!file) return res.status(404).json({ error: ERR_MSG.FILE_NOT_FOUND });
 
     return res.download(file.filePath, file.fileName, (err) => {
       if (err) {

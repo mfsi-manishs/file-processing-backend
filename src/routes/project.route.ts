@@ -4,6 +4,7 @@
  */
 
 import { Router } from "express";
+import { ERR_MSG } from "../constants.js";
 import type { Project } from "../models/project.model.js";
 import { ProjectRepository } from "../repositories/project.repo.js";
 
@@ -22,6 +23,7 @@ export default function projectsRouter() {
    */
   router.post("/", async (req, res) => {
     const { name, description } = req.body;
+    if (!name || name.length <= 2) return res.status(400).json({ error: ERR_MSG.NAME_IS_REQUIRED });
     let project: Project | null = null;
     try {
       project = await projectRepo.create(name, description);
@@ -53,13 +55,15 @@ export default function projectsRouter() {
     const id = Number(req.params.id);
     const include = req.query.include;
 
+    if (isNaN(id) || id <= 0) return res.status(400).json({ error: ERR_MSG.ID_IS_REQUIRED });
+
     let project: Project | (Project & number) | null = null;
     try {
       project = await projectRepo.getById(id, include as string | undefined);
     } catch (error: unknown) {
       return res.status(500).json({ error: (error as Error).message });
     }
-    if (!project) return res.status(404).json({ error: "Not found" });
+    if (!project) return res.status(404).json({ error: ERR_MSG.NOT_FOUND_IN_DB });
     return res.json(project);
   });
 
@@ -69,6 +73,9 @@ export default function projectsRouter() {
   router.put("/:id", async (req, res) => {
     const id = Number(req.params.id);
     const { name, description } = req.body;
+    if (isNaN(id) || id <= 0) return res.status(400).json({ error: ERR_MSG.ID_IS_REQUIRED });
+    if (!name || name.length <= 2) return res.status(400).json({ error: ERR_MSG.NAME_IS_REQUIRED });
+
     let projects = [];
     try {
       projects = await projectRepo.update(id, name, description);
@@ -76,7 +83,7 @@ export default function projectsRouter() {
       return res.status(400).json({ error: (error as Error).message });
     }
 
-    if (!projects.length) return res.status(404).json({ error: "Not found" });
+    if (!projects.length) return res.status(404).json({ error: ERR_MSG.NOT_FOUND_IN_DB });
     return res.json(projects[0]);
   });
 

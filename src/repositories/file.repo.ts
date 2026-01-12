@@ -3,6 +3,7 @@
  * @fileoverview File repository
  */
 
+import { ERR_MSG } from "../constants.js";
 import { type Queryable } from "../db/db.utils.js";
 import { pool } from "../db/pool.js";
 import { getFilesFromRows, type File } from "../models/file.model.js";
@@ -27,7 +28,7 @@ export class FileRepository {
     const params = [file.projectId, file.fileName, file.filePath, file.fileType, file.fileSize, file.checksum ?? null, file.isOutput];
     const result = await db.query(query, params);
     const f = getFilesFromRows(result.rows)[0];
-    if (!f) throw new Error("Failed to create file");
+    if (!f) throw new Error(ERR_MSG.FAILED_TO_CREATE_FILE_IN_DB);
     return f;
   }
 
@@ -46,7 +47,7 @@ export class FileRepository {
       [projectId]
     );
     const files = getFilesFromRows(result.rows);
-    if (!files) throw new Error("Failed to list files");
+    if (!files) throw new Error(ERR_MSG.FAILED_TO_LIST_FILES_FROM_DB);
     return files;
   }
 
@@ -66,7 +67,7 @@ export class FileRepository {
       [id, projectId]
     );
     const file = getFilesFromRows(result.rows)[0];
-    if (!file) throw new Error("Failed to delete file");
+    if (!file) throw new Error(ERR_MSG.FAILED_TO_DELETE_FILE_FROM_DB);
     return file;
   }
 
@@ -84,7 +85,7 @@ export class FileRepository {
     const params = [projectId, fileIds];
     const result = await db.query(query, params);
     const files = getFilesFromRows(result.rows);
-    if (!files) throw new Error("Failed to list files");
+    if (!files) throw new Error(ERR_MSG.FAILED_TO_LIST_FILES_FROM_DB);
     return files;
   }
 
@@ -103,7 +104,7 @@ export class FileRepository {
       [projectId, id]
     );
     const file = getFilesFromRows(result.rows)[0];
-    if (!file) throw new Error("Failed to get file");
+    if (!file) throw new Error(ERR_MSG.FAILED_TO_GET_FILE_FROM_DB);
     return file;
   }
 }

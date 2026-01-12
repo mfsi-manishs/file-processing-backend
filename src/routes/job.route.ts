@@ -4,6 +4,7 @@
  */
 
 import { Router } from "express";
+import { ERR_MSG } from "../constants.js";
 import { JobRepository } from "../repositories/job.repo.js";
 import { queueJob } from "../services/jobs.service.js";
 
@@ -29,12 +30,17 @@ export default function filesRouter() {
    */
   router.post("/:projectId/jobs/zip", async (req, res) => {
     const projectId = Number(req.params.projectId);
+    if (isNaN(projectId) || projectId <= 0) return res.status(400).json({ error: ERR_MSG.PROJECT_ID_IS_REQUIRED });
+
     const { fileIds } = req.body;
+    if (!fileIds || fileIds.length === 0) return res.status(400).json({ error: ERR_MSG.FILE_ID_IS_REQUIRED });
+    if (fileIds.length > 10) return res.status(400).json({ error: ERR_MSG.FILE_ID_LIMIT_EXCEEDED });
+
     try {
       const job = await queueJob(projectId, "ZIP_COMPRESSION", fileIds);
-      res.status(201).json(job);
+      return res.status(201).json(job);
     } catch (e: any) {
-      res.status(400).json({ error: e.message });
+      return res.status(400).json({ error: e.message });
     }
   });
 
@@ -49,12 +55,18 @@ export default function filesRouter() {
    */
   router.get("/:projectId/jobs", async (req, res) => {
     const projectId = Number(req.params.projectId);
+    if (isNaN(projectId) || projectId <= 0) return res.status(400).json({ error: ERR_MSG.PROJECT_ID_IS_REQUIRED });
+
     const status = req.query.status as string | undefined;
+    if (status && !["PENDING", "PROCESSING", "COMPLETED", "FAILED"].includes(status)) {
+      return res.status(400).json({ error: ERR_MSG.INVALID_JOB_STATUS });
+    }
+
     try {
       const jobs = await new JobRepository().findByProject(projectId, status);
-      res.json(jobs);
+      return res.json(jobs);
     } catch (error) {
-      res.status(500).json({ error: (error as Error).message });
+      return res.status(500).json({ error: (error as Error).message });
     }
   });
 

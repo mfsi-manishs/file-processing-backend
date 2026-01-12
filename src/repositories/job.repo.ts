@@ -3,6 +3,7 @@
  * @fileoverview Job repository
  */
 
+import { ERR_MSG } from "../constants.js";
 import { type Queryable } from "../db/db.utils.js";
 import { pool } from "../db/pool.js";
 import { getJobFromRows, type Job, type JobType } from "../models/job.model.js";
@@ -66,7 +67,7 @@ export class JobRepository {
     const params = [projectId, jobType];
     const result = await db.query(query, params);
     const job = getJobFromRows(result.rows)[0];
-    if (!job) throw new Error("Failed to create job");
+    if (!job) throw new Error(ERR_MSG.FAILED_TO_CREATE_JOB_IN_DB);
     return job;
   }
 
@@ -84,7 +85,7 @@ export class JobRepository {
       [projectId]
     );
     const jobs = getJobFromRows(result.rows);
-    if (!jobs || jobs.length === 0) throw new Error("Failed to find active jobs");
+    if (!jobs || jobs.length === 0) throw new Error(ERR_MSG.FAILED_TO_FIND_ACTIVE_JOBS_IN_DB);
     return jobs;
   }
 
@@ -110,7 +111,7 @@ export class JobRepository {
       params
     );
     const jobs = getJobFromRows(result.rows);
-    if (!jobs || jobs.length === 0) throw new Error("Failed to find jobs");
+    if (!jobs || jobs.length === 0) throw new Error(ERR_MSG.FAILED_TO_FIND_JOBS_IN_DB);
     return jobs;
   }
 
@@ -129,7 +130,7 @@ export class JobRepository {
        LIMIT 1`
     );
     const jobs = getJobFromRows(result.rows);
-    if (!jobs) throw new Error("Failed to find pending jobs");
+    if (!jobs) throw new Error(ERR_MSG.FAILED_TO_FIND_PENDING_JOBS_IN_DB);
     return jobs;
   }
 
@@ -150,7 +151,7 @@ export class JobRepository {
       [projectId, jobId, progress ?? null]
     );
     const job = getJobFromRows(result.rows)[0];
-    if (!job) throw new Error("Failed to update job");
+    if (!job) throw new Error(ERR_MSG.FAILED_TO_UPDATE_JOB_IN_DB);
     return job;
   }
 
@@ -170,7 +171,7 @@ export class JobRepository {
       [projectId, jobId]
     );
     const job = getJobFromRows(result.rows)[0];
-    if (!job) throw new Error("Failed to update job");
+    if (!job) throw new Error(ERR_MSG.FAILED_TO_UPDATE_JOB_IN_DB);
     return job;
   }
 
@@ -191,7 +192,7 @@ export class JobRepository {
       [projectId, jobId, outputFileId]
     );
     const job = getJobFromRows(result.rows)[0];
-    if (!job) throw new Error("Failed to update job");
+    if (!job) throw new Error(ERR_MSG.FAILED_TO_UPDATE_JOB_IN_DB);
     return job;
   }
 
@@ -212,7 +213,7 @@ export class JobRepository {
       [projectId, jobId, message]
     );
     const job = getJobFromRows(result.rows)[0];
-    if (!job) throw new Error("Failed to update job");
+    if (!job) throw new Error(ERR_MSG.FAILED_TO_UPDATE_JOB_IN_DB);
     return job;
   }
 }

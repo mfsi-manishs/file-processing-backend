@@ -89,5 +89,34 @@ export default function filesRouter(upload: Multer) {
     return res.json(file);
   });
 
+  /**
+   * Downloads a file of a project
+   * Throws an error if the file could not be downloaded
+   * @param {number} projectId - The ID of the project to which the file belongs
+   * @param {number} fileId - The ID of the file to be downloaded
+   * @returns {File[]} An array of file records
+   * @throws {Error} If the file could not be downloaded
+   * @route GET /:projectId/files/:fileId/download
+   * @group Files
+   */
+  router.get("/:projectId/files/:fileId/download", async (req, res) => {
+    const projectId = Number(req.params.projectId);
+    const fileId = Number(req.params.fileId);
+    let file;
+    try {
+      file = await new FileRepository().getById(projectId, fileId);
+    } catch (error: unknown) {
+      return res.status(500).json({ error: (error as Error).message });
+    }
+    if (!file) return res.status(404).json({ error: "File not found" });
+
+    return res.download(file.filePath, file.fileName, (err) => {
+      if (err) {
+        return res.status(500).json({ error: err });
+      }
+      return;
+    });
+  });
+
   return router;
 }

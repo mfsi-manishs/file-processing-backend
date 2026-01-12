@@ -87,4 +87,23 @@ export class FileRepository {
     if (!files) throw new Error("Failed to list files");
     return files;
   }
+
+  /**
+   * Finds a file record by its ID and project ID.
+   * @param {number} projectId - The ID of the project to which the file belongs.
+   * @param {number} id - The ID of the file to find.
+   * @param {Queryable} [db] - The PostgreSQL client to use for the transaction.
+   * @returns {Promise<File>} - The file record if found.
+   * @throws {Error} If the file record could not be found.
+   */
+  async getById(projectId: number, id: number, db: Queryable = pool): Promise<File> {
+    const result = await db.query(
+      `SELECT * FROM files
+       WHERE project_id=$1 AND id=$2`,
+      [projectId, id]
+    );
+    const file = getFilesFromRows(result.rows)[0];
+    if (!file) throw new Error("Failed to get file");
+    return file;
+  }
 }

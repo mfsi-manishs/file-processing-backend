@@ -34,6 +34,28 @@ app.use("/api/projects", projectsRouter());
 app.use("/api/projects", filesRouter(upload));
 app.use("/api/projects", jobsRouter());
 
+// Handle 404 errors
+// @ts-ignore
+app.all(/.*/, (req, res, next) => {
+  // Pass a custom error to the global handler
+  const err = new Error(`Route ${req.originalUrl} not found`);
+  (err as any).statusCode = 404;
+  next(err);
+});
+
+// Global error handler
+// Always place this AFTER the catch-all middleware
+// @ts-ignore
+app.use((err: any, req: any, res: any, next: any) => {
+  const statusCode = err.statusCode || 500;
+
+  res.status(statusCode).json({
+    message: err.message || "Internal Server Error",
+    // Send stack traces only in development environment
+    stack: process.env.NODE_ENV === "development" ? err.stack : undefined,
+  });
+});
+
 startWorkerPool({ size: Number(process.env.WORKER_COUNT) || 2 });
 
 // Start the server

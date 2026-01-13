@@ -89,13 +89,30 @@ export default function filesRouter(upload: Multer) {
     const fileId = Number(req.params.fileId);
     if (isNaN(fileId) || fileId <= 0) return res.status(400).json({ error: ERR_MSG.ID_IS_REQUIRED });
 
-    let file;
     try {
-      file = await new FileRepository().delete(projectId, fileId);
-    } catch (error: unknown) {
+      const delFile = await runQueriesAsTransaction(async (client) => {
+        const file = await new FileRepository().getById(projectId, fileId, client);
+        if (!file) throw new Error(ERR_MSG.FILE_NOT_FOUND);
+        try {
+          await fs.unlink(file.filePath, (err) => {
+            if (err) throw new Error(err.message);
+          });
+        } catch (error: any) {
+          if (error.code !== "ENOENT") throw error;
+        }
+        let deletedFile;
+        try {
+          deletedFile = await new FileRepository().delete(projectId, fileId);
+        } catch (error: unknown) {
+          throw error;
+        }
+        return deletedFile;
+      });
+      if (!delFile) return res.status(404).json({ error: ERR_MSG.FILE_NOT_FOUND });
+      return res.sendStatus(204);
+    } catch (error) {
       return res.status(500).json({ error: (error as Error).message });
     }
-    return res.json(file);
   });
 
   /**

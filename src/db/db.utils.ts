@@ -66,10 +66,10 @@ export async function runQueriesAsTransaction<T>(callback: (client: PoolClient) 
     const result = await callback(client);
     await client.query("COMMIT");
     return result;
-  } catch (err) {
+  } catch (err: any) {
     await client.query("ROLLBACK");
     console.error("Transaction failed:", err);
-    throw new Error("Database transaction failed");
+    throw new Error("Database transaction failed with code: " + err.code);
   } finally {
     client.release();
   }

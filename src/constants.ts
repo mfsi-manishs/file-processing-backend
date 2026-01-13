@@ -1,5 +1,8 @@
 export const ERR_MSG = {
   NAME_IS_REQUIRED: "Name is required and should be at least 3 characters long",
+  INVALID_NAME: "Name should be at least 3 characters long",
+  INVALID_DESCRIPTION: "Description should be at least 3 characters long",
+  NAME_OR_DESCRIPTION_IS_REQUIRED: "Name or Description is required and should be at least 3 characters long",
   ID_IS_REQUIRED: "ID is required and should be a positive number",
   PROJECT_ID_IS_REQUIRED: "Project ID is required and should be a positive number",
   FILE_ID_IS_REQUIRED: "Atleast one File ID is required and should be a positive number",
